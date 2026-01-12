@@ -172,6 +172,20 @@ let loadingIndicator = null;
     console.log('Gallery timeout fallback message displayed');
   }
 
+  // Wait for Supabase client to be ready
+  async function waitForSupabase(maxWait = 5000) {
+    const startTime = Date.now();
+    while (typeof window.supabaseClient === 'undefined' || window.supabaseClient === null) {
+      if (Date.now() - startTime > maxWait) {
+        console.error('❌ Supabase client not available after', maxWait, 'ms');
+        return false;
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    console.log('✅ Supabase client is ready');
+    return true;
+  }
+
   // Initialize the new prompt system
   async function init() {
     const target = document.querySelector('.prompt');
@@ -179,6 +193,7 @@ let loadingIndicator = null;
     
     console.log('Driftpad v2 Prompt System initializing...');
     console.log('DOM elements found:', { target, newPromptBtn });
+    console.log('Supabase client status:', typeof window.supabaseClient);
     
     
     if (!target || !newPromptBtn) {
@@ -188,6 +203,12 @@ let loadingIndicator = null;
 
     // Show loading state to prevent placeholder "text" from showing
     target.textContent = 'Loading...';
+
+    // Wait for Supabase client to be ready
+    const supabaseReady = await waitForSupabase();
+    if (!supabaseReady) {
+      console.warn('⚠️ Supabase not available, will use fallback prompts');
+    }
 
     // Initialize session tracking
     initSession();
@@ -769,8 +790,8 @@ let loadingIndicator = null;
   async function loadLocationBySlug(slug) {
     console.log('Loading location by slug:', slug);
     
-    if (typeof window.supabaseClient === 'undefined') {
-      console.log('Supabase not available, using generic prompts');
+    if (typeof window.supabaseClient === 'undefined' || window.supabaseClient === null) {
+      console.log('⚠️ Supabase not available, using generic prompts');
       return;
     }
     
@@ -784,7 +805,13 @@ let loadingIndicator = null;
         .limit(1);
       
       if (error) {
-        console.error('Error loading location by slug:', error);
+        console.error('❌ Error loading location by slug:', error);
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         return;
       }
       
@@ -807,7 +834,7 @@ let loadingIndicator = null;
     console.log('🔍 Searching for nearby locations...');
     console.log('📍 User coordinates:', { latitude, longitude });
     
-    if (typeof window.supabaseClient === 'undefined') {
+    if (typeof window.supabaseClient === 'undefined' || window.supabaseClient === null) {
       console.log('❌ Supabase not available, using generic prompts');
       return;
     }
@@ -821,6 +848,12 @@ let loadingIndicator = null;
       
       if (error) {
         console.error('❌ Error loading locations:', error);
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
         return;
       }
       
@@ -1535,13 +1568,13 @@ let loadingIndicator = null;
 
   // Fetch prompt from database
   async function fetchPrompt() {
-    if (typeof window.supabaseClient === 'undefined') {
-      console.log('Supabase not available, using fallback');
+    if (typeof window.supabaseClient === 'undefined' || window.supabaseClient === null) {
+      console.log('⚠️ Supabase not available, using fallback');
       return null;
     }
     
     try {
-      console.log('Fetching prompt from Supabase...');
+      console.log('📡 Fetching prompt from Supabase...');
       let query = window.supabaseClient
         .from('prompts')
         .select('id, content, category, requires_shape, requires_gallery_image, location_id, weight')
@@ -1571,8 +1604,14 @@ let loadingIndicator = null;
       const { data, error } = await withTimeout(query.limit(50), 5000);
       
       if (error) {
-        console.error('Error fetching prompt:', error);
-        console.log('Network error detected, using fallback prompt');
+        console.error('❌ Error fetching prompt:', error);
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
+        console.log('⚠️ Network error detected, using fallback prompt');
         return null;
       }
       
@@ -1731,8 +1770,8 @@ let loadingIndicator = null;
     const startTime = performance.now();
     console.log('Starting gallery image load for type:', type);
     
-    if (typeof window.supabaseClient === 'undefined') {
-      console.log('Supabase not available for gallery image');
+    if (typeof window.supabaseClient === 'undefined' || window.supabaseClient === null) {
+      console.log('⚠️ Supabase not available for gallery image');
       return;
     }
     
@@ -2123,6 +2162,13 @@ let loadingIndicator = null;
       }
     }
   };
+
+  // Listen for Supabase ready event as backup
+  window.addEventListener('supabaseReady', () => {
+    console.log('📡 Supabase ready event received');
+    // If init hasn't run yet, it will pick up the client
+    // If it's already waiting, waitForSupabase will detect it
+  });
 
   // Initialize when DOM is ready
   if (document.readyState === 'loading') {
