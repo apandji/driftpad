@@ -156,51 +156,56 @@
         });
         
         // Supabase configuration (for drawings)
-        const SUPABASE_URL = 'https://rwdllkszmgallbrqbqkk.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3ZGxsa3N6bWdhbGxicnFicWtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MjQ1MjYsImV4cCI6MjA3NDUwMDUyNn0.-hGEPB0F7SLL6rd9MHvyoTGsGMqrJDPyIOv5amdld0s';
-        
-        // Initialize Supabase client and make it globally available
-        // Wait for Supabase library to load before initializing
-        let supabaseInitAttempts = 0;
-        const maxSupabaseInitAttempts = 50; // 5 seconds max (50 * 100ms)
-        
-        function initSupabaseClient() {
-            supabaseInitAttempts++;
+        (function() {
+            'use strict';
             
-            if (typeof window.supabase !== 'undefined' && window.supabase && window.supabase.createClient) {
-                try {
-                    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-                    console.log('✅ Supabase client initialized successfully');
-                    // Dispatch event to notify other scripts
-                    window.dispatchEvent(new CustomEvent('supabaseReady'));
-                } catch (error) {
-                    console.error('❌ Error initializing Supabase client:', error);
+            const SUPABASE_URL = 'https://rwdllkszmgallbrqbqkk.supabase.co';
+            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3ZGxsa3N6bWdhbGxicnFicWtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MjQ1MjYsImV4cCI6MjA3NDUwMDUyNn0.-hGEPB0F7SLL6rd9MHvyoTGsGMqrJDPyIOv5amdld0s';
+            
+            // Initialize Supabase client and make it globally available
+            // Wait for Supabase library to load before initializing
+            let supabaseInitAttempts = 0;
+            const maxSupabaseInitAttempts = 50; // 5 seconds max (50 * 100ms)
+            
+            function initSupabaseClient() {
+                supabaseInitAttempts++;
+                
+                // Access supabase via window to avoid variable shadowing
+                const supabaseLib = window.supabase;
+                
+                if (typeof supabaseLib !== 'undefined' && supabaseLib && supabaseLib.createClient) {
+                    try {
+                        window.supabaseClient = supabaseLib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                        console.log('✅ Supabase client initialized successfully');
+                        // Dispatch event to notify other scripts
+                        window.dispatchEvent(new CustomEvent('supabaseReady'));
+                    } catch (error) {
+                        console.error('❌ Error initializing Supabase client:', error);
+                        window.supabaseClient = null;
+                        // Dispatch event anyway so scripts know Supabase failed
+                        window.dispatchEvent(new CustomEvent('supabaseReady', { detail: { error: error } }));
+                    }
+                } else if (supabaseInitAttempts < maxSupabaseInitAttempts) {
+                    // Retry after a short delay if Supabase library isn't loaded yet
+                    if (supabaseInitAttempts % 10 === 0) {
+                        console.log('⏳ Waiting for Supabase library to load... (attempt', supabaseInitAttempts + ')');
+                    }
+                    setTimeout(initSupabaseClient, 100);
+                } else {
+                    console.error('❌ Supabase library failed to load after', maxSupabaseInitAttempts, 'attempts');
                     window.supabaseClient = null;
-                    // Dispatch event anyway so scripts know Supabase failed
-                    window.dispatchEvent(new CustomEvent('supabaseReady', { detail: { error: error } }));
+                    // Dispatch event to notify scripts that Supabase is not available
+                    window.dispatchEvent(new CustomEvent('supabaseReady', { detail: { error: 'Library load timeout' } }));
                 }
-            } else if (supabaseInitAttempts < maxSupabaseInitAttempts) {
-                // Retry after a short delay if Supabase library isn't loaded yet
-                if (supabaseInitAttempts % 10 === 0) {
-                    console.log('⏳ Waiting for Supabase library to load... (attempt', supabaseInitAttempts + ')');
-                }
-                setTimeout(initSupabaseClient, 100);
-            } else {
-                console.error('❌ Supabase library failed to load after', maxSupabaseInitAttempts, 'attempts');
-                window.supabaseClient = null;
-                // Dispatch event to notify scripts that Supabase is not available
-                window.dispatchEvent(new CustomEvent('supabaseReady', { detail: { error: 'Library load timeout' } }));
             }
-        }
-        
-        // Start initialization when DOM is ready or immediately if already ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initSupabaseClient);
-        } else {
-            initSupabaseClient();
-        }
-        
-        const supabase = window.supabaseClient;
+            
+            // Start initialization when DOM is ready or immediately if already ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initSupabaseClient);
+            } else {
+                initSupabaseClient();
+            }
+        })();
         
         
         // Generate or get user UUID (for drawings)
@@ -326,7 +331,12 @@
                 const imageData = canvas.toDataURL('image/png');
                 const userUUID = getUserUUID();
                 
-                const { data, error } = await supabase
+                if (!window.supabaseClient) {
+                    window.showToast('Database not ready. Please try again.');
+                    return;
+                }
+                
+                const { data, error } = await window.supabaseClient
                     .from('drawings')
                     .insert({
                         user_uuid: userUUID,

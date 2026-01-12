@@ -286,13 +286,73 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onload="console.log('✅ Supabase library loaded (gallery)')" onerror="console.error('❌ Failed to load Supabase library (gallery)')"></script>
     <script>
-        // Supabase configuration (same as index.html)
-        const SUPABASE_URL = 'https://rwdllkszmgallbrqbqkk.supabase.co';
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3ZGxsa3N6bWdhbGxicnFicWtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MjQ1MjYsImV4cCI6MjA3NDUwMDUyNn0.-hGEPB0F7SLL6rd9MHvyoTGsGMqrJDPyIOv5amdld0s';
-        
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        (function() {
+            'use strict';
+            
+            // Supabase configuration (same as index.html)
+            const SUPABASE_URL = 'https://rwdllkszmgallbrqbqkk.supabase.co';
+            const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3ZGxsa3N6bWdhbGxicnFicWtrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MjQ1MjYsImV4cCI6MjA3NDUwMDUyNn0.-hGEPB0F7SLL6rd9MHvyoTGsGMqrJDPyIOv5amdld0s';
+            
+            // Initialize Supabase client and make it globally available
+            // Wait for Supabase library to load before initializing
+            let supabaseInitAttempts = 0;
+            const maxSupabaseInitAttempts = 50; // 5 seconds max (50 * 100ms)
+            
+            function initSupabaseClient() {
+                supabaseInitAttempts++;
+                
+                // Access supabase via window to avoid variable shadowing
+                const supabaseLib = window.supabase;
+                
+                if (typeof supabaseLib !== 'undefined' && supabaseLib && supabaseLib.createClient) {
+                    try {
+                        window.supabaseClient = supabaseLib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                        console.log('✅ Supabase client initialized successfully (gallery)');
+                        // Dispatch event to notify other scripts
+                        window.dispatchEvent(new CustomEvent('supabaseReady'));
+                    } catch (error) {
+                        console.error('❌ Error initializing Supabase client (gallery):', error);
+                        window.supabaseClient = null;
+                        // Dispatch event anyway so scripts know Supabase failed
+                        window.dispatchEvent(new CustomEvent('supabaseReady', { detail: { error: error } }));
+                    }
+                } else if (supabaseInitAttempts < maxSupabaseInitAttempts) {
+                    // Retry after a short delay if Supabase library isn't loaded yet
+                    if (supabaseInitAttempts % 10 === 0) {
+                        console.log('⏳ Waiting for Supabase library to load (gallery)... (attempt', supabaseInitAttempts + ')');
+                    }
+                    setTimeout(initSupabaseClient, 100);
+                } else {
+                    console.error('❌ Supabase library failed to load after', maxSupabaseInitAttempts, 'attempts (gallery)');
+                    window.supabaseClient = null;
+                    // Dispatch event to notify scripts that Supabase is not available
+                    window.dispatchEvent(new CustomEvent('supabaseReady', { detail: { error: 'Library load timeout' } }));
+                }
+            }
+            
+            // Start initialization when DOM is ready or immediately if already ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initSupabaseClient);
+            } else {
+                initSupabaseClient();
+            }
+            
+            // Wait for Supabase client to be ready before loading drawings
+            window.waitForSupabaseGallery = async function(maxWait = 5000) {
+                const startTime = Date.now();
+                while (typeof window.supabaseClient === 'undefined' || window.supabaseClient === null) {
+                    if (Date.now() - startTime > maxWait) {
+                        console.error('❌ Supabase client not available after', maxWait, 'ms (gallery)');
+                        return false;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                console.log('✅ Supabase client is ready (gallery)');
+                return true;
+            };
+        })();
         
         // Pagination state
         let currentPage = 0;
@@ -358,6 +418,14 @@
         async function loadDrawings(reset = false) {
             if (isLoading) return;
             
+            // Wait for Supabase to be ready
+            const supabaseReady = await window.waitForSupabaseGallery();
+            if (!supabaseReady || !window.supabaseClient) {
+                const galleryContent = document.getElementById('gallery-content');
+                galleryContent.innerHTML = '<div class="empty-state"><h3>Database not available</h3><p>Please refresh the page.</p></div>';
+                return;
+            }
+            
             const galleryContent = document.getElementById('gallery-content');
             
             if (reset) {
@@ -375,7 +443,7 @@
             isLoading = true;
             
             try {
-                const { data: drawings, error } = await supabase
+                const { data: drawings, error } = await window.supabaseClient
                     .from('drawings')
                     .select('*')
                     .eq('is_public', true)
@@ -383,7 +451,13 @@
                     .range(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE - 1);
                 
                 if (error) {
-                    console.error('Error loading drawings:', error);
+                    console.error('❌ Error loading drawings:', error);
+                    console.error('Error details:', {
+                        message: error.message,
+                        code: error.code,
+                        details: error.details,
+                        hint: error.hint
+                    });
                     if (reset) {
                         galleryContent.innerHTML = '<div class="empty-state"><h3>Error loading gallery</h3><p>Please try again later.</p></div>';
                     }
