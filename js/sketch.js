@@ -196,6 +196,9 @@ document.addEventListener('DOMContentLoaded', function() {
     lastSpeed = 0;
     drawingStartTime = Date.now();
     currentWidth = computeWidth(pressure, 0);
+
+    // Ambient sound fades in while drawing
+    if (window.driftAmbient) window.driftAmbient.drawStart();
     
     // Keep cursor visible during drawing
     if (cursor) cursor.style.display = 'block';
@@ -267,6 +270,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function endDraw() {
+    // Ambient sound fades out a moment after the last stroke
+    if (isDrawing && window.driftAmbient) window.driftAmbient.drawEnd();
     isDrawing = false;
     
     // End watercolor brush stroke

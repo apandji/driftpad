@@ -148,6 +148,26 @@ header button:active {
   transform: translateY(0);
 }
 
+/* Sound toggle: quiet when off */
+#sound-btn {
+  min-width: 0;
+  padding: 8px 11px;
+  font-size: 0.875rem;
+  font-weight: normal;
+  line-height: inherit;
+}
+
+#sound-btn[aria-pressed="false"] {
+  color: var(--muted);
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+@media (max-width: 480px) {
+  .header-right { gap: 6px; }
+  #sound-btn { padding: 6px 9px; font-size: 0.8rem; }
+}
+
 header button a {
   color: inherit;
   text-decoration: none;

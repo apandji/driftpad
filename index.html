@@ -12,7 +12,7 @@
     <meta name="twitter:title" content="Driftpad. Meditative digital drawing experience">
     <meta name="twitter:description" content="A meditative digital drawing experience inspired by sumi ink painting">
     <title>driftpad</title>
-    <link rel="stylesheet" href="style.css?v=14">
+    <link rel="stylesheet" href="style.css?v=16">
         <!-- Umami Analytics -->
         <script defer src="https://cloud.umami.is/script.js" data-website-id="8ae5578c-320f-4d25-860a-f93ed10e541e"></script>
 </head>
@@ -23,6 +23,7 @@
             <div id="streak-indicator" class="streak-indicator">🌊 0</div>
         </div>
         <div class="header-right">
+            <button id="sound-btn" type="button" aria-pressed="true" aria-label="Ambient sound while drawing" title="Sound on while drawing">♪</button>
             <button id="feedback-btn">feedback</button>
             <button id="gallery-btn">gallery</button>
         </div>
@@ -47,7 +48,8 @@
     <script src="js/fade-timer.js" defer></script>
     <script src="js/shape-generator.js"></script>
     <script src="js/prompts-v2.js?v=33" defer></script>
-    <script src="js/sketch.js?v=5" defer></script>
+    <script src="js/ambient.js?v=2" defer></script>
+    <script src="js/sketch.js?v=6" defer></script>
     <script src="js/pull-to-refresh.js" defer></script>
     <script src="js/feedback-collector.js" defer></script>
     <script src="js/local-streak.js" defer></script>

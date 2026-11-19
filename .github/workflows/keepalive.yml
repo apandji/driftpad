@@ -1,0 +1,48 @@
+name: Keep Supabase awake
+
+# Supabase pauses a free project after 7 days without API traffic.
+# This reads one row twice a week so the database never goes a week idle.
+# GitHub also switches off scheduled workflows after 60 days without repo
+# activity; the last step re-enables this workflow on every run, which
+# resets that clock, so no commits are needed.
+
+on:
+  schedule:
+    - cron: '17 9 * * 1,4' # Mondays and Thursdays, 09:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read one row from each table the app uses
+        run: |
+          # The URL and the public anon key are the ones the site already ships in index.html.
+          URL=$(grep -o "SUPABASE_URL = '[^']*'" index.html | head -1 | cut -d"'" -f2)
+          KEY=$(grep -o "SUPABASE_ANON_KEY = '[^']*'" index.html | head -1 | cut -d"'" -f2)
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then
+            echo "Could not find the Supabase URL or key in index.html"; exit 1
+          fi
+          fail=0
+          for table in prompts drawings locations; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+              "$URL/rest/v1/$table?select=id&limit=1" \
+              -H "apikey: $KEY" -H "Authorization: Bearer $KEY")
+            echo "$table: HTTP $code"
+            [ "$code" = "200" ] || fail=1
+          done
+          # A paused or missing project fails the run, and GitHub emails the owner.
+          exit $fail
+
+      - name: Keep this schedule from being switched off
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/keepalive.yml/enable"
